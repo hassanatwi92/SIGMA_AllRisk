@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sigma All Risk Calculator</title>
+<style>
+:root{--bg:#f6f7f9;--card:#fff;--tx:#1b1f24;--mu:#667085;--bd:#e3e6ea;--ac:#0b5ed7;--ok:#0a7a3d;--wn:#b45309;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12151a;--card:#1b2027;--tx:#eef0f3;--mu:#9aa4b2;--bd:#2c333d;--ac:#6ea8fe;--ok:#4cc38a;--wn:#f0b45a}}
+:root[data-theme="dark"]{--bg:#12151a;--card:#1b2027;--tx:#eef0f3;--mu:#9aa4b2;--bd:#2c333d;--ac:#6ea8fe;--ok:#4cc38a;--wn:#f0b45a}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:720px;margin:0 auto;padding:16px}
+h1{font-size:20px;margin:4px 0 14px}
+.in{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+label{font-size:13px;color:var(--mu);display:block;margin-bottom:4px}
+input{width:100%;box-sizing:border-box;padding:12px;font-size:18px;border:1px solid var(--bd);border-radius:10px;background:var(--card);color:var(--tx)}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:12px 14px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.card.best{border-color:var(--ok)}
+.n{font-weight:600}.s{font-size:12.5px;color:var(--mu);margin-top:3px}
+.p{font-size:22px;font-weight:700;white-space:nowrap}
+.na .p{font-size:14px;color:var(--mu);font-weight:500}.na{opacity:.75}
+.min{color:var(--wn)}
+.hint{font-size:12px;color:var(--mu);margin-top:14px;line-height:1.5}
+</style>
+</head>
+<body>
+<main>
+<h1>Sigma – All Risk Premiums</h1>
+<div class="in">
+<div><label for="y">Model year</label><input id="y" type="number" inputmode="numeric" placeholder="2022"></div>
+<div><label for="v">Car value (USD)</label><input id="v" type="number" inputmode="numeric" placeholder="35000"></div>
+</div>
+<div id="out"></div>
+<div class="hint">Premium = value × rate, but never below the plan's minimum premium. Vehicle age = current year − model year. Standard II: add USD 45 for compulsory BI, and electric cars +15% (min 690) need approval.</div>
+</main>
+<script>
+var NOW=new Date().getFullYear();
+function idx(v,e){for(var i=0;i<e.length;i++)if(v<=e[i])return i;return -1}
+function yband(y,b){for(var i=0;i<b.length;i++)if(y>=b[i][0]&&y<=b[i][1])return i;return -1}
+
+function std2(y,v){
+ if(v>100000)return{na:"Referral (value > 100k)"};
+ var i=yband(y,[[2024,2026],[2021,2023],[2017,2020],[2014,2016],[2010,2013]]);
+ if(i<0)return{na:"Year not in tariff"};
+ var R=[[2.52,2.41],[2.68,2.57],[2.95,2.79],[3.21,3.05],[3.48,3.32]];
+ return[{name:"Standard II",rate:R[i][v<=50000?0:1],min:595}];
+}
+function lux(y,v){
+ if(y<2022||y>2026)return{na:"Only 2022–2026"};
+ return[{name:"Motor Luxury",rate:v<=50000?2.89:2.57,min:710}];
+}
+function prem(y,v){
+ var a=NOW-y,out=[];
+ var ab=[[0,2],[3,3],[4,4],[5,6],[7,7],[8,9],[10,15]];
+ var R=[[2.90,2.60,2.50],[2.90,2.70,2.50],[3.20,2.85,2.70],[3.20,2.85,2.80],[3.65,3.20,2.80],[3.65,3.20,2.90],[4.10,3.75,3.20]];
+ var i=yband(a,ab),j=idx(v,[50000,100000,300000]);
+ if(i>=0&&j>=0)out.push({name:"All Risk Premium – without dealer repair",rate:R[i][j],min:690});
+ var D=[[3.20,3.20,3.20,2.80,2.70],[null,3.20,3.20,2.85,2.70],[null,3.55,3.40,2.85,2.70],[null,3.75,3.55,2.90,2.80],[null,null,3.75,3.20,2.90]];
+ var k=idx(v,[20000,35000,50000,100000,300000]);
+ if(a>=0&&a<=4&&k>=0&&D[a][k]!=null)out.push({name:"All Risk Premium – with dealer repair",rate:D[a][k],min:810});
+ return out.length?out:{na:"Not available for this age/value"};
+}
+function std(y,v){
+ if(v>100000)return{na:"Referral (value > 100k)"};
+ var i=yband(y,[[2023,2026],[2019,2022],[2015,2018],[2007,2014]]);
+ if(i<0)return{na:"Year not in tariff"};
+ var R=[[2.41,2.14,1.93],[3.21,2.89,2.68],[3.75,3.48,3.21],[4.02,3.75,3.48]];
+ var r=R[i][idx(v,[25000,50000,100000])],out=[{name:"Standard Plan",rate:r,min:570}];
+ if(y>=2023)out.push({name:"Standard Plan – agency repair",rate:+(r+0.54).toFixed(2),min:570});
+ return out;
+}
+function money(n){return"$"+n.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}
+function run(){
+ var y=parseInt(document.getElementById("y").value),v=parseFloat(document.getElementById("v").value),o=document.getElementById("out");
+ if(!y||!v||y>NOW){o.innerHTML="";return}
+ var res=[],nas=[];
+ [[std2,"Standard II"],[lux,"Motor Luxury"],[prem,"All Risk Premium"],[std,"Standard Plan"]].forEach(function(p){
+  var r=p[0](y,v);
+  if(r.na)nas.push({name:p[1],na:r.na});
+  else r.forEach(function(x){var raw=v*x.rate/100;x.raw=raw;x.final=Math.max(raw,x.min);x.minApplied=raw<x.min;res.push(x)});
+ });
+ res.sort(function(a,b){return a.final-b.final});
+ var h="";
+ res.forEach(function(x,i){
+  h+='<div class="card'+(i==0?" best":"")+'"><div><div class="n">'+x.name+'</div><div class="s">Rate '+x.rate.toFixed(2)+'% → '+money(x.raw)+(x.minApplied?' <span class="min">· minimum '+money(x.min)+' applied</span>':'')+'</div></div><div class="p">'+money(x.final)+'</div></div>';
+ });
+ nas.forEach(function(x){h+='<div class="card na"><div class="n">'+x.name+'</div><div class="p">'+x.na+'</div></div>'});
+ o.innerHTML=h;
+}
+document.getElementById("y").addEventListener("input",run);
+document.getElementById("v").addEventListener("input",run);
+</script>
+</body>
+</html>
